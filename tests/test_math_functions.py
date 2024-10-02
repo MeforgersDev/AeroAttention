@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
-from math_functions.fft import fft, ifft
-from math_functions.svd import svd
+from aeroattention.math_functions.fft import fft, ifft
+from aeroattention.math_functions.svd import svd
 
 class TestMathFunctions(unittest.TestCase):
     
