@@ -2,7 +2,7 @@
 
 ## Overview
 
-**AeroAttention** is an advanced attention mechanism designed to optimize model training by integrating detailed mathematical operations and custom quantum-enhanced algorithms. It aims to surpass existing mechanisms like Flash Attention 2 by offering greater flexibility, memory efficiency, and computational speed. AeroAttention is fully customizable, allowing researchers and developers to tailor it to their specific needs without relying on external quantum computing libraries.
+**AeroAttention** is an innovative, quantum-enhanced attention mechanism designed for transformer models. It offers optimized memory usage and accelerated computations, enabling scalable and efficient training for advanced neural network architectures.
 
 ## Features
 
