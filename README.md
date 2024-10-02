@@ -11,7 +11,7 @@
 - **Entropy-Based Sparsity:** Reduces computational overhead by focusing on significant components.
 - **Block Diagonalization:** Enhances computational efficiency by processing smaller matrix blocks.
 - **Fully Optimized for Performance:** Designed to minimize memory usage and maximize speed.
-- **Flexible Integration:** Easily integrates with popular transformer models like GPT-2 and LLaMA 2.
+- **Flexible Integration:** Easily integrates with popular transformer models.
 
 ## Installation
 
