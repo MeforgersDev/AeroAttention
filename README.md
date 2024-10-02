@@ -195,13 +195,13 @@
 ### Running Tests
 AeroAttention includes a comprehensive test suite to ensure all components function correctly.
 1. Navigate to the Project Directory
-   ```bash
-    cd AeroAttention
-   ```
+      ```bash
+       cd AeroAttention
+      ```
 2. Run Tests
-  ```bash
-  python -m unittest discover tests
-  ```
+     ```bash
+     python -m unittest discover tests
+     ```
 ## License
 **This project is licensed under the MIT License - see the LICENSE file for details.**
 
