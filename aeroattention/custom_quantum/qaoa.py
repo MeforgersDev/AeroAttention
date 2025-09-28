@@ -1,26 +1,17 @@
-# custom_quantum/qaoa.py
+from __future__ import annotations
 
-import numpy as np
+from .._compat import require_numpy
+
 
 def qaoa_layer(gamma, beta, hamiltonian, state_vector):
-    """
-    Applies one layer of the Quantum Approximate Optimization Algorithm (QAOA).
+    """Apply one layer of the Quantum Approximate Optimization Algorithm."""
 
-    Parameters:
-    - gamma (float): Phase separation parameter.
-    - beta (float): Mixing parameter.
-    - hamiltonian (np.ndarray): Hamiltonian matrix representing the problem.
-    - state_vector (np.ndarray): Current state vector of the system.
+    numpy = require_numpy("qaoa_layer")
 
-    Returns:
-    - new_state_vector (np.ndarray): Updated state vector after QAOA layer.
-    """
-    # Apply the phase separation unitary operator
-    phase_operator = np.diag(np.exp(-1j * gamma * np.diag(hamiltonian)))
-    state_vector = np.dot(phase_operator, state_vector)
+    phase_operator = numpy.diag(numpy.exp(-1j * gamma * numpy.diag(hamiltonian)))
+    state_vector = numpy.dot(phase_operator, state_vector)
 
-    # Apply the mixing unitary operator
-    mixing_operator = np.full_like(state_vector, np.cos(beta)) + 1j * np.sin(beta)
+    mixing_operator = numpy.full_like(state_vector, numpy.cos(beta)) + 1j * numpy.sin(beta)
     state_vector = state_vector * mixing_operator
 
     return state_vector

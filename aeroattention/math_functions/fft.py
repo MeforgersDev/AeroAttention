@@ -1,39 +1,30 @@
-import numpy as np
+from __future__ import annotations
+
+from .._compat import require_numpy
+
 
 def fft(x):
-    """
-    Computes the discrete Fourier Transform of the 1D array x using the Cooley-Tukey algorithm.
+    """Compute the discrete Fourier transform of ``x`` using NumPy."""
 
-    Parameters:
-    - x (np.ndarray): Input array.
+    numpy = require_numpy("fft")
+    x = numpy.asarray(x, dtype=complex)
+    n = x.shape[0]
 
-    Returns:
-    - X (np.ndarray): The Fourier Transform of the input array.
-    """
-    x = np.asarray(x, dtype=complex)
-    N = x.shape[0]
-    
-    if N <= 1:
+    if n <= 1:
         return x
-    else:
-        X_even = fft(x[::2])
-        X_odd = fft(x[1::2])
-        factor = np.exp(-2j * np.pi * np.arange(N) / N)
-        return np.concatenate([X_even + factor[:N // 2] * X_odd,
-                               X_even + factor[N // 2:] * X_odd])
 
-def ifft(X):
-    """
-    Computes the inverse discrete Fourier Transform using the Cooley-Tukey algorithm.
+    x_even = fft(x[::2])
+    x_odd = fft(x[1::2])
+    factor = numpy.exp(-2j * numpy.pi * numpy.arange(n) / n)
+    return numpy.concatenate((x_even + factor[: n // 2] * x_odd, x_even + factor[n // 2 :] * x_odd))
 
-    Parameters:
-    - X (np.ndarray): Input array in the frequency domain.
 
-    Returns:
-    - x (np.ndarray): The inverse Fourier Transform of the input array.
-    """
-    X_conj = np.conjugate(X)
-    x = fft(X_conj)
-    x = np.conjugate(x)
-    x = x / X.shape[0]
-    return x
+def ifft(x):
+    """Compute the inverse discrete Fourier transform of ``x`` using NumPy."""
+
+    numpy = require_numpy("ifft")
+    x_conj = numpy.conjugate(x)
+    result = fft(x_conj)
+    result = numpy.conjugate(result)
+    result = result / x.shape[0]
+    return result

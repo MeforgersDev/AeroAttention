@@ -1,17 +1,12 @@
+from __future__ import annotations
+
 # entanglement.py
 
-import numpy as np
+from .._compat import require_numpy
+
 
 def create_entanglement(matrix):
-    """
-    Creates entanglement by transposing the matrix, simulating entanglement.
+    """Simulate entanglement by transposing ``matrix``."""
 
-    Parameters:
-    - matrix (np.ndarray): Input matrix.
-
-    Returns:
-    - entangled_matrix (np.ndarray): Entangled matrix.
-    """
-    # Optimized entanglement simulation
-    entangled_matrix = np.transpose(matrix)
-    return entangled_matrix
+    numpy = require_numpy("create_entanglement")
+    return numpy.transpose(matrix)
