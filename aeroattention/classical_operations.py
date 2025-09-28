@@ -1,16 +1,12 @@
-import numpy as np
+from __future__ import annotations
+
+from ._compat import require_numpy
+
 
 def classical_attention(matrix):
-    """
-    Applies classical attention computation using softmax.
+    """Apply a softmax operation to ``matrix`` along the last axis."""
 
-    Parameters:
-    - matrix (np.ndarray): Input matrix.
-
-    Returns:
-    - attention_weights (np.ndarray): Attention weights matrix.
-    """
-    # Compute softmax along the last axis
-    exp_matrix = np.exp(matrix - np.max(matrix, axis=-1, keepdims=True))
-    attention_weights = exp_matrix / np.sum(exp_matrix, axis=-1, keepdims=True)
+    numpy = require_numpy("classical_attention")
+    exp_matrix = numpy.exp(matrix - numpy.max(matrix, axis=-1, keepdims=True))
+    attention_weights = exp_matrix / numpy.sum(exp_matrix, axis=-1, keepdims=True)
     return attention_weights

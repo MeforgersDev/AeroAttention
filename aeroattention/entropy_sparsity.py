@@ -1,26 +1,19 @@
-import numpy as np
+from __future__ import annotations
+
+from ._compat import require_numpy
+
 
 def entropy_sparse_filter(attention_matrix, threshold=0.1):
-    """
-    Filters out components with low entropy.
+    """Filter out components with low entropy."""
 
-    Parameters:
-    - attention_matrix (np.ndarray): Input attention matrix.
-    - threshold (float): Entropy threshold.
-
-    Returns:
-    - sparse_matrix (np.ndarray): Sparsified attention matrix.
-    """
-    # Calculate probabilities
+    numpy = require_numpy("entropy_sparse_filter")
     epsilon = 1e-9
-    probabilities = np.abs(attention_matrix) + epsilon
-    probabilities /= np.sum(probabilities, axis=-1, keepdims=True)
+    probabilities = numpy.abs(attention_matrix) + epsilon
+    probabilities /= numpy.sum(probabilities, axis=-1, keepdims=True)
 
-    # Compute entropy
-    entropy = -np.sum(probabilities * np.log(probabilities), axis=-1)
-    entropy = entropy / np.log(probabilities.shape[-1])  # Normalize entropy
+    entropy = -numpy.sum(probabilities * numpy.log(probabilities), axis=-1)
+    entropy = entropy / numpy.log(probabilities.shape[-1])
 
-    # Sparsify the matrix
     mask = (entropy > threshold).astype(float)
-    sparse_matrix = attention_matrix * mask[:, np.newaxis]
+    sparse_matrix = attention_matrix * mask[:, numpy.newaxis]
     return sparse_matrix

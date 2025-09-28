@@ -1,12 +1,15 @@
+from __future__ import annotations
+
 # aero_attention.py
 
-import numpy as np
-from .custom_quantum.quantum_fourier import quantum_fourier_transform
+from ._compat import require_numpy
 from .custom_quantum.entanglement import create_entanglement
 from .custom_quantum.qaoa import qaoa_layer
+from .custom_quantum.quantum_fourier import quantum_fourier_transform
 from .classical_operations import classical_attention
 from .entropy_sparsity import entropy_sparse_filter
 from .utilities import compress_matrix, block_diagonalize
+
 
 class AeroAttention:
     def __init__(self, num_qubits=4, threshold=0.1, compression_level=0.5, block_size=64, qaoa_layers=1):
@@ -36,6 +39,8 @@ class AeroAttention:
         Returns:
         - final_attention (np.ndarray): The final attention matrix after processing.
         """
+        numpy = require_numpy("AeroAttention.compute_attention")
+
         # Step 1: Quantum Fourier Transform with parallel processing
         qft_matrix = quantum_fourier_transform(token_matrix)
 
@@ -58,8 +63,8 @@ class AeroAttention:
             state_vector = self.initialize_state_vector(entangled_block.shape[0])
 
             # Choose gamma and beta values for QAOA
-            gamma = np.pi / 4
-            beta = np.pi / 8
+            gamma = numpy.pi / 4
+            beta = numpy.pi / 8
 
             # Apply QAOA layers
             for _ in range(self.qaoa_layers):
@@ -91,9 +96,10 @@ class AeroAttention:
         Returns:
         - final_attention (np.ndarray): Combined attention matrix.
         """
+        numpy = require_numpy("AeroAttention._combine_blocks")
         block_sizes = [block.shape[0] for block in blocks]
         total_size = sum(block_sizes)
-        final_attention = np.zeros((total_size, total_size), dtype=complex)
+        final_attention = numpy.zeros((total_size, total_size), dtype=complex)
         start = 0
         for block in blocks:
             size = block.shape[0]
@@ -111,8 +117,8 @@ class AeroAttention:
         Returns:
         - hamiltonian (np.ndarray): Hamiltonian matrix.
         """
-        # For demonstration, using the input matrix as the Hamiltonian
-        hamiltonian = np.copy(matrix)
+        numpy = require_numpy("AeroAttention.construct_hamiltonian")
+        hamiltonian = numpy.copy(matrix)
         return hamiltonian
 
     def initialize_state_vector(self, size):
@@ -125,8 +131,8 @@ class AeroAttention:
         Returns:
         - state_vector (np.ndarray): Initialized state vector.
         """
-        # Initialize state vector in equal superposition
-        state_vector = np.ones(size, dtype=complex) / np.sqrt(size)
+        numpy = require_numpy("AeroAttention.initialize_state_vector")
+        state_vector = numpy.ones(size, dtype=complex) / numpy.sqrt(size)
         return state_vector
 
     def extract_attention_from_state(self, state_vector):
@@ -139,7 +145,7 @@ class AeroAttention:
         Returns:
         - attention_matrix (np.ndarray): Extracted attention matrix.
         """
-        # Calculate probabilities from the state vector
-        probabilities = np.abs(state_vector) ** 2
-        attention_matrix = np.outer(probabilities, probabilities)
+        numpy = require_numpy("AeroAttention.extract_attention_from_state")
+        probabilities = numpy.abs(state_vector) ** 2
+        attention_matrix = numpy.outer(probabilities, probabilities)
         return attention_matrix
