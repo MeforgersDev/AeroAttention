@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 # aero_attention.py
+from typing import TYPE_CHECKING
 
 from ._compat import require_numpy
 from .custom_quantum.entanglement import create_entanglement
@@ -9,6 +10,9 @@ from .custom_quantum.quantum_fourier import quantum_fourier_transform
 from .classical_operations import classical_attention
 from .entropy_sparsity import entropy_sparse_filter
 from .utilities import compress_matrix, block_diagonalize
+
+if TYPE_CHECKING:  # pragma: no cover - used for type checkers only
+    import numpy as np
 
 
 class AeroAttention:
