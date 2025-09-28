@@ -21,11 +21,16 @@ setup(
     python_requires='>=3.6',
     install_requires=[
         "numpy>=1.19.5",
+        "torch>=2.1.0",
     ],
     extras_require={
         "dev": [
             "pytest>=6.0",
             "pytest-cov",
+        ],
+        "cuda": [
+            "triton>=2.1.0",
+            "flash-attn>=2.5.6"
         ],
     },
     include_package_data=True,

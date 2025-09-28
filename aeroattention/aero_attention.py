@@ -1,155 +1,138 @@
 from __future__ import annotations
 
-# aero_attention.py
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import Optional, Tuple
 
-from ._compat import require_numpy
-from .custom_quantum.entanglement import create_entanglement
-from .custom_quantum.qaoa import qaoa_layer
-from .custom_quantum.quantum_fourier import quantum_fourier_transform
-from .classical_operations import classical_attention
-from .entropy_sparsity import entropy_sparse_filter
-from .utilities import compress_matrix, block_diagonalize
+import torch
+from torch import Tensor, nn
 
-if TYPE_CHECKING:  # pragma: no cover - used for type checkers only
-    import numpy as np
+from .fused_attention import (
+    KVCache,
+    aero_fused_attention,
+    fused_multi_head_attention,
+    project_qkv,
+)
 
 
-class AeroAttention:
-    def __init__(self, num_qubits=4, threshold=0.1, compression_level=0.5, block_size=64, qaoa_layers=1):
-        """
-        Initializes the AeroAttention mechanism.
+@dataclass
+class AttentionOutput:
+    """Container for attention outputs and optional metadata."""
 
-        Parameters:
-        - num_qubits (int): Number of qubits for quantum representation.
-        - threshold (float): Entropy threshold for sparsity.
-        - compression_level (float): Compression ratio (0 to 1).
-        - block_size (int): Size of blocks for block diagonalization.
-        - qaoa_layers (int): Number of QAOA layers to apply.
-        """
-        self.num_qubits = num_qubits
-        self.threshold = threshold
-        self.compression_level = compression_level
-        self.block_size = block_size
-        self.qaoa_layers = qaoa_layers
+    output: Tensor
+    attn_probs: Optional[Tensor]
+    kv_cache: Optional[KVCache]
 
-    def compute_attention(self, token_matrix):
-        """
-        Computes the AeroAttention mechanism on the input token matrix.
 
-        Parameters:
-        - token_matrix (np.ndarray): Input token matrix.
+class AeroAttention(nn.Module):
+    """Fused multi-head attention module used throughout AeroAttention."""
 
-        Returns:
-        - final_attention (np.ndarray): The final attention matrix after processing.
-        """
-        numpy = require_numpy("AeroAttention.compute_attention")
+    def __init__(
+        self,
+        embed_dim: int,
+        num_heads: int,
+        dropout_p: float = 0.0,
+        bias: bool = True,
+        use_out_proj: bool = True,
+        device: Optional[torch.device] = None,
+        dtype: Optional[torch.dtype] = None,
+    ) -> None:
+        super().__init__()
+        if embed_dim % num_heads != 0:
+            raise ValueError("embed_dim must be divisible by num_heads")
+        factory_kwargs = {"device": device, "dtype": dtype}
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.head_dim = embed_dim // num_heads
+        self.dropout_p = dropout_p
 
-        # Step 1: Quantum Fourier Transform with parallel processing
-        qft_matrix = quantum_fourier_transform(token_matrix)
+        self.q_proj = nn.Linear(embed_dim, embed_dim, bias=bias, **factory_kwargs)
+        self.k_proj = nn.Linear(embed_dim, embed_dim, bias=bias, **factory_kwargs)
+        self.v_proj = nn.Linear(embed_dim, embed_dim, bias=bias, **factory_kwargs)
+        self.out_proj = nn.Linear(embed_dim, embed_dim, bias=bias, **factory_kwargs) if use_out_proj else None
 
-        # Step 2: Matrix Compression using custom SVD
-        compressed_matrix = compress_matrix(qft_matrix, self.compression_level)
+    def build_kv_cache(self, batch_size: int) -> KVCache:
+        empty = torch.empty(
+            (batch_size, self.num_heads, 0, self.head_dim),
+            dtype=self.q_proj.weight.dtype,
+            device=self.q_proj.weight.device,
+        )
+        return KVCache(key=empty, value=empty.clone())
 
-        # Step 3: Block Diagonalization
-        blocks = block_diagonalize(compressed_matrix, self.block_size)
+    def project_qkv(self, hidden_states: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+        return project_qkv(hidden_states, self.q_proj, self.k_proj, self.v_proj)
 
-        # Initialize list to store attention results
-        attention_blocks = []
+    def _reshape_to_heads(self, tensor: Tensor) -> Tensor:
+        batch, seq_len, embed_dim = tensor.shape
+        head_dim = embed_dim // self.num_heads
+        return tensor.view(batch, seq_len, self.num_heads, head_dim).transpose(1, 2)
 
-        # Step 4: Process each block
-        for block in blocks:
-            # Step 4.1: Create entanglement (optimized)
-            entangled_block = create_entanglement(block)
+    def _reshape_from_heads(self, tensor: Tensor) -> Tensor:
+        batch, num_heads, seq_len, head_dim = tensor.shape
+        return tensor.transpose(1, 2).contiguous().view(batch, seq_len, num_heads * head_dim)
 
-            # Step 4.2: QAOA Optimization
-            hamiltonian = self.construct_hamiltonian(entangled_block)
-            state_vector = self.initialize_state_vector(entangled_block.shape[0])
+    def compute_attention(
+        self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        attn_mask: Optional[Tensor] = None,
+        causal: bool = False,
+        kv_cache: Optional[KVCache] = None,
+        return_attn_probs: bool = False,
+        dropout_p: Optional[float] = None,
+    ) -> AttentionOutput:
+        """Compute multi-head attention using the fused kernel."""
 
-            # Choose gamma and beta values for QAOA
-            gamma = numpy.pi / 4
-            beta = numpy.pi / 8
+        dropout = self.dropout_p if dropout_p is None else dropout_p
 
-            # Apply QAOA layers
-            for _ in range(self.qaoa_layers):
-                state_vector = qaoa_layer(gamma, beta, hamiltonian, state_vector)
+        if query.dim() == 3 and query.size(-1) == self.embed_dim:
+            query = self._reshape_to_heads(query)
+        if key.dim() == 3 and key.size(-1) == self.embed_dim:
+            key = self._reshape_to_heads(key)
+        if value.dim() == 3 and value.size(-1) == self.embed_dim:
+            value = self._reshape_to_heads(value)
 
-            # Extract attention from the final state vector
-            attention_matrix = self.extract_attention_from_state(state_vector)
+        if kv_cache is not None:
+            cached_k, cached_v = kv_cache.append(key, value)
+            key, value = cached_k, cached_v
 
-            # Step 4.3: Classical Attention Computation
-            classical_result = classical_attention(attention_matrix)
+        output, attn_probs = fused_multi_head_attention(
+            query,
+            key,
+            value,
+            attn_mask=attn_mask,
+            dropout_p=dropout,
+            training=self.training,
+            causal=causal,
+        )
+        output = self._reshape_from_heads(output)
+        if self.out_proj is not None:
+            output = self.out_proj(output)
+        return AttentionOutput(output=output, attn_probs=attn_probs if return_attn_probs else None, kv_cache=kv_cache)
 
-            # Step 4.4: Entropy-based Sparsity
-            final_block_attention = entropy_sparse_filter(classical_result, self.threshold)
+    def forward(
+        self,
+        hidden_states: Tensor,
+        attn_mask: Optional[Tensor] = None,
+        causal: bool = False,
+        kv_cache: Optional[KVCache] = None,
+        return_attn_probs: bool = False,
+    ) -> AttentionOutput:
+        """Project inputs and compute fused attention in a single call."""
 
-            attention_blocks.append(final_block_attention)
-
-        # Step 5: Combine blocks into final attention matrix
-        final_attention = self._combine_blocks(attention_blocks)
-
-        return final_attention
-
-    def _combine_blocks(self, blocks):
-        """
-        Combines attention blocks into the final attention matrix.
-
-        Parameters:
-        - blocks (list of np.ndarray): List of attention blocks.
-
-        Returns:
-        - final_attention (np.ndarray): Combined attention matrix.
-        """
-        numpy = require_numpy("AeroAttention._combine_blocks")
-        block_sizes = [block.shape[0] for block in blocks]
-        total_size = sum(block_sizes)
-        final_attention = numpy.zeros((total_size, total_size), dtype=complex)
-        start = 0
-        for block in blocks:
-            size = block.shape[0]
-            final_attention[start:start+size, start:start+size] = block
-            start += size
-        return final_attention
-
-    def construct_hamiltonian(self, matrix):
-        """
-        Constructs the Hamiltonian for QAOA based on the input matrix.
-
-        Parameters:
-        - matrix (np.ndarray): Input matrix.
-
-        Returns:
-        - hamiltonian (np.ndarray): Hamiltonian matrix.
-        """
-        numpy = require_numpy("AeroAttention.construct_hamiltonian")
-        hamiltonian = numpy.copy(matrix)
-        return hamiltonian
-
-    def initialize_state_vector(self, size):
-        """
-        Initializes the state vector for QAOA.
-
-        Parameters:
-        - size (int): Size of the state vector.
-
-        Returns:
-        - state_vector (np.ndarray): Initialized state vector.
-        """
-        numpy = require_numpy("AeroAttention.initialize_state_vector")
-        state_vector = numpy.ones(size, dtype=complex) / numpy.sqrt(size)
-        return state_vector
-
-    def extract_attention_from_state(self, state_vector):
-        """
-        Extracts the attention matrix from the final state vector after QAOA.
-
-        Parameters:
-        - state_vector (np.ndarray): Final state vector from QAOA.
-
-        Returns:
-        - attention_matrix (np.ndarray): Extracted attention matrix.
-        """
-        numpy = require_numpy("AeroAttention.extract_attention_from_state")
-        probabilities = numpy.abs(state_vector) ** 2
-        attention_matrix = numpy.outer(probabilities, probabilities)
-        return attention_matrix
+        output, attn_probs, cache = aero_fused_attention(
+            hidden_states,
+            self.q_proj,
+            self.k_proj,
+            self.v_proj,
+            num_heads=self.num_heads,
+            attn_mask=attn_mask,
+            dropout_p=self.dropout_p,
+            training=self.training,
+            causal=causal,
+            kv_cache=kv_cache,
+            out_proj=self.out_proj,
+        )
+        if not return_attn_probs:
+            attn_probs = None
+        return AttentionOutput(output=output, attn_probs=attn_probs, kv_cache=cache)

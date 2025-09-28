@@ -1,8 +1,13 @@
 import unittest
-import numpy as np
+try:
+    import numpy as np
+except ImportError:  # pragma: no cover - optional dependency
+    np = None
+
 from aeroattention.math_functions.fft import fft, ifft
 from aeroattention.math_functions.svd import svd
 
+@unittest.skipUnless(np is not None, "NumPy is required for math function tests")
 class TestMathFunctions(unittest.TestCase):
     
     def test_fft(self):

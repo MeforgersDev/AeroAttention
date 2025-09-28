@@ -1,9 +1,14 @@
 import unittest
-import numpy as np
+try:
+    import numpy as np
+except ImportError:  # pragma: no cover - optional dependency
+    np = None
+
 from aeroattention.custom_quantum.qubit import Qubit
 from aeroattention.custom_quantum.quantum_gate import hadamard
 from aeroattention.custom_quantum.quantum_fourier import quantum_fourier_transform
 
+@unittest.skipUnless(np is not None, "NumPy is required for quantum tests")
 class TestCustomQuantum(unittest.TestCase):
     
     def test_qubit_initialization(self):
