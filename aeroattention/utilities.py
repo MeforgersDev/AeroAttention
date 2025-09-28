@@ -1,5 +1,6 @@
 # utilities.py
 import numpy as np
+from typing import List
 from math_functions.svd import svd
 
 def compress_matrix(matrix, compression_level):
@@ -93,3 +94,73 @@ def strassen_matrix_multiply(A, B):
         bottom = np.hstack((C21, C22))
         C = np.vstack((top, bottom))
         return C
+
+
+def block_diagonalize(matrix: np.ndarray, block_size: int) -> List[np.ndarray]:
+    """Split a matrix into consecutive square blocks along its diagonal.
+
+    Parameters
+    ----------
+    matrix : np.ndarray
+        The input matrix to be partitioned.
+    block_size : int
+        Desired size for each square block.
+
+    Returns
+    -------
+    List[np.ndarray]
+        A list of square ``numpy`` arrays representing the diagonal blocks.
+
+    Raises
+    ------
+    ValueError
+        If ``matrix`` is not two-dimensional, ``block_size`` is not positive,
+        ``block_size`` exceeds the smallest matrix dimension, or the matrix is
+        empty.
+    """
+
+    if not isinstance(matrix, np.ndarray):
+        raise TypeError("matrix must be a numpy.ndarray")
+
+    if matrix.ndim != 2:
+        raise ValueError("matrix must be two-dimensional")
+
+    rows, cols = matrix.shape
+
+    if rows == 0 or cols == 0:
+        raise ValueError("matrix must have non-zero dimensions")
+
+    if block_size <= 0:
+        raise ValueError("block_size must be a positive integer")
+
+    min_dim = min(rows, cols)
+    if block_size > min_dim:
+        raise ValueError(
+            "block_size cannot be larger than the smallest matrix dimension"
+        )
+
+    blocks: List[np.ndarray] = []
+    row_start = 0
+    col_start = 0
+
+    while row_start < rows and col_start < cols:
+        remaining_rows = rows - row_start
+        remaining_cols = cols - col_start
+
+        current_block_size = block_size
+        if remaining_rows < block_size or remaining_cols < block_size:
+            current_block_size = min(remaining_rows, remaining_cols)
+
+        if current_block_size == 0:
+            break
+
+        block = matrix[
+            row_start : row_start + current_block_size,
+            col_start : col_start + current_block_size,
+        ]
+        blocks.append(block)
+
+        row_start += current_block_size
+        col_start += current_block_size
+
+    return blocks
